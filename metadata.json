@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Steuer KI Agent Software",
+  "description": "Eine Mini-Web-Software, die als KI-gesteuerter Steuerassistent fungiert. Sie ermöglicht das Hochladen, automatische Suchen und intelligente Kategorisieren von Belegen aus verschiedenen Quellen wie lokalen Ordnern, E-Mails und WhatsApp.",
+  "requestFramePermissions": []
+}

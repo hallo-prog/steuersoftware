@@ -1,9 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { Document, DocumentSource, DocumentStatus, InvoiceType, Rule, RuleSuggestion } from '../types';
+import { Document, DocumentSource, DocumentStatus, InvoiceType, Rule, RuleSuggestion, DocumentFolder, ExtractedDeadline } from '../types';
 import { analyzeDocument, getDocumentStatusFromAnalysis, createSuggestedFileName, embedTexts, extractContactsFromText } from '../services/geminiLazy';
 import { uploadFileToBucket, insertDocument, updateDocument } from '../services/supabaseDataService';
 import { hybridUpload } from '../services/hybridStorage';
 import { upsertContactDedupe } from '../services/contactDedupe';
+import { enhancedDocumentAnalyzer } from '../services/enhancedDocumentAnalyzer';
+import { taskService } from '../services/taskService';
+import { notificationService } from '../services/notificationService';
+import { auditService } from '../services/auditService';
 import { UploadCloudIcon } from './icons/UploadCloudIcon';
 import { ComputerIcon } from './icons/ComputerIcon';
 import { XIcon } from './icons/XIcon';
@@ -92,6 +96,67 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, setDocuments, rules,
             invoiceType: result.invoiceType,
             taxCategory: result.taxCategory,
           };
+
+          // Enhanced analysis for folder assignment, deadlines, and tasks (FR-03, FR-06, FR-07)
+          try {
+            const enhancedAnalysis = await enhancedDocumentAnalyzer.analyzeDocumentEnhanced(file, result, apiKey);
+            (finalDoc as any).folder = enhancedAnalysis.folder;
+            (finalDoc as any).extractedDeadlines = enhancedAnalysis.extractedDeadlines;
+            (finalDoc as any).needsManualReview = enhancedAnalysis.needsManualReview;
+            (finalDoc as any).generatedTasks = [];
+            
+            // Generate and create tasks from document analysis
+            const generatedTasks = await taskService.generateTasksFromDocument(finalDoc as Document, apiKey, userId);
+            (finalDoc as any).generatedTasks = generatedTasks.map(task => task.id);
+            
+            // Schedule notifications for extracted deadlines
+            if (enhancedAnalysis.extractedDeadlines && enhancedAnalysis.extractedDeadlines.length > 0) {
+              const scheduledNotifications = notificationService.scheduleDeadlineNotifications(finalDoc as Document);
+              auditService.logAction(
+                'deadline_notifications_scheduled',
+                'document',
+                placeholder.id,
+                { 
+                  deadlineCount: enhancedAnalysis.extractedDeadlines.length,
+                  notificationCount: scheduledNotifications.length 
+                },
+                true,
+                userId
+              );
+              
+              if (scheduledNotifications.length > 0) {
+                showToast?.(`${scheduledNotifications.length} Erinnerung(en) für Fristen geplant`, 'info');
+              }
+            }
+            
+            // Log enhanced analysis success
+            auditService.logDocumentAnalysis(
+              placeholder.id,
+              true,
+              'gemini',
+              {
+                folder: enhancedAnalysis.folder,
+                deadlineCount: enhancedAnalysis.extractedDeadlines?.length || 0,
+                taskCount: generatedTasks.length,
+                confidence: enhancedAnalysis.confidence
+              }
+            );
+            
+            if (generatedTasks.length > 0) {
+              showToast?.(`${generatedTasks.length} Aufgabe(n) automatisch erstellt`, 'success');
+            }
+          } catch (enhancedError) {
+            console.warn('Enhanced analysis failed, continuing with basic analysis:', enhancedError);
+            auditService.logAction(
+              'enhanced_analysis_failed',
+              'document',
+              placeholder.id,
+              { error: enhancedError instanceof Error ? enhancedError.message : 'Unknown error' },
+              false,
+              userId,
+              'gemini'
+            );
+          }
           let inserted: Document | null = null;
           try {
             // Embedding berechnen (Text gekürzt für Kostenkontrolle)

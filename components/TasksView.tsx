@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Task, Document } from '../types';
-import { fetchTasks, updateTask, deleteTask } from '../services/supabaseDataService';
+import { fetchTasks, updateTask, deleteTask, insertAuditEvent } from '../services/supabaseDataService';
 import { useThemeClasses } from '../hooks/useThemeClasses';
 
 interface TasksViewProps {
@@ -39,6 +39,65 @@ const TasksView: React.FC<TasksViewProps> = ({ userId, documents, apiKey, onSele
   };
 
   const handleDelete = async (task: Task) => { if (!window.confirm('Aufgabe wirklich löschen?')) return; try { await deleteTask(task.id); setTasks(prev=> prev.filter(t=>t.id!==task.id)); } catch { showToast?.('Löschen fehlgeschlagen','error'); } };
+
+  const handleAutoAction = async (task: Task) => {
+    if (!task.autoAction?.suggested) return;
+    
+    // FR-10: Ask user for confirmation
+    const action = task.autoAction;
+    let confirmMessage = `Soll ich diese automatische Aktion ausführen?\n\nAufgabe: ${task.title}`;
+    
+    if (action.type === 'email') {
+      confirmMessage += `\nTyp: E-Mail versenden (${action.template || 'Standard-Vorlage'})`;
+    }
+    
+    if (!window.confirm(confirmMessage)) return;
+    
+    try {
+      // FR-11: Execute the autonomous action
+      if (action.type === 'email') {
+        // For now, we simulate email sending since full SMTP integration would require server setup
+        showToast?.('E-Mail Vorlage wurde in die Zwischenablage kopiert. Bitte in Ihr E-Mail-Programm einfügen.', 'info');
+        
+        // Copy email template to clipboard
+        const emailContent = `Betreff: ${action.template === 'payment_confirmation' ? 'Zahlungsbestätigung' : 'Nachricht'}
+
+Sehr geehrte Damen und Herren,
+
+${action.template === 'payment_confirmation' 
+  ? 'hiermit bestätigen wir den Erhalt Ihrer Zahlung. Vielen Dank für die pünktliche Begleichung der Rechnung.' 
+  : 'wir setzen uns bezüglich Ihres Anliegens mit Ihnen in Verbindung.'}
+
+Mit freundlichen Grüßen`;
+
+        await navigator.clipboard.writeText(emailContent);
+        
+        // Mark task as auto_executed
+        const updatedTask = await updateTask(task.id, { 
+          status: 'auto_executed',
+          autoAction: { ...action, executedAt: new Date().toISOString() }
+        });
+        
+        setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t));
+        
+        // Log audit event
+        try {
+          await insertAuditEvent(task.userId, {
+            actorType: 'ai',
+            eventType: 'task.auto_action.executed',
+            payloadJson: { taskId: task.id, actionType: action.type, template: action.template }
+          });
+        } catch (e) {
+          console.warn('Audit event failed', e);
+        }
+        
+        showToast?.('Automatische Aktion ausgeführt', 'success');
+      }
+    } catch (error) {
+      showToast?.('Automatische Aktion fehlgeschlagen', 'error');
+      console.error('Auto action failed:', error);
+    }
+  };
 
   const openDoc = (task: Task) => { if (task.documentId) onSelectDocument(task.documentId); };
 
@@ -79,6 +138,14 @@ const TasksView: React.FC<TasksViewProps> = ({ userId, documents, apiKey, onSele
               {task.description && <p className={`text-sm ${ui.textMuted} whitespace-pre-line`}>{task.description}</p>}
               {doc && <p className="text-xs text-slate-500 truncate">Beleg: {doc.name}</p>}
               <div className="mt-auto flex justify-end gap-2 pt-2">
+                {task.autoAction?.suggested && task.status !== 'auto_executed' && (
+                  <button 
+                    onClick={() => handleAutoAction(task)} 
+                    className="text-xs px-2 py-1 rounded bg-purple-600 text-white hover:bg-purple-700"
+                  >
+                    Auto-Aktion ausführen
+                  </button>
+                )}
                 <button onClick={()=>handleStatusToggle(task)} className="text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700">{task.status==='done'?'Reaktivieren':'Erledigt'}</button>
                 <button onClick={()=>handleDelete(task)} className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Löschen</button>
               </div>

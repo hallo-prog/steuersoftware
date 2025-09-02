@@ -7,6 +7,10 @@ export enum View {
   LEXOFFICE = 'lexoffice',
   PROFILE = 'profile',
   FÖRDERUNGEN = 'förderungen',
+  VERSICHERUNGEN = 'versicherungen',
+  VERBINDLICHKEITEN = 'verbindlichkeiten',
+  KONTAKTE = 'kontakte',
+  DATENBANKEN = 'datenbanken',
 }
 
 export enum DocumentSource {
@@ -63,6 +67,10 @@ export interface UserProfile {
   taxNumber: string;
   companyForm: string;
   profilePicture?: string;
+  industry?: string;
+  employees?: number;
+  locationState?: string; // Bundesland
+  foundingYear?: number;
 }
 
 export interface Document {
@@ -75,6 +83,7 @@ export interface Document {
   status: DocumentStatus;
   fileUrl: string;
   file?: File;
+  storageProvider?: 'supabase' | 'r2';
   textContent?: string;
   vendor?: string;
   totalAmount?: number;
@@ -82,6 +91,11 @@ export interface Document {
   invoiceNumber?: string;
   invoiceType: InvoiceType;
   taxCategory?: string;
+  aiSuggestedTaxCategory?: string;
+  flags?: string[];
+  anomalyScore?: number;
+  liabilityId?: string; // relation zu Verbindlichkeiten
+  insurancePolicyId?: string; // relation zu Versicherungspolice
   lexoffice?: {
     status: LexofficeStatus;
     sentAt: Date;
@@ -129,4 +143,122 @@ export interface FundingOpportunity {
   description: string;
   eligibilitySummary: string;
   link: string;
+  // Optionale erweiterte Metadaten für intelligentere Suche/Aufbereitung
+  relevanceScore?: number; // von KI berechneter Score 0-1
+  fetchedAt?: string; // ISO Zeitstempel wann gefunden
+  sourceUrls?: string[]; // Ursprüngliche Quell-URLs aus der Websuche
+  level?: 'bund' | 'land' | 'eu' | 'other'; // Klassifikation Förder-Ebene
+  land?: string; // Bundesland Name falls level === 'land'
+  requires?: string[]; // Anforderungsliste (optional KI)
+  coverageRatePercent?: number;
+  grantAmountMin?: number;
+  grantAmountMax?: number;
+  validTo?: string;
 }
+
+export type InsuranceType = 'Betriebshaftpflicht' | 'Hausrat' | 'Private Rechtsschutz' | 'Betriebliche Rechtsschutz' | 'KFZ' | 'Sonstige';
+export type InsuranceClaimType = 'Schadensfall' | 'Rechtsschutzfall' | 'Zahlungsfall';
+
+export interface InsuranceDocument {
+  id: string;
+  fileName: string;
+  uploadedAt: string;
+  textContent?: string;
+  publicUrl?: string;
+  // Neu: interner Storage-Pfad (wird gespeichert, um publicUrl nach Reload rekonstruieren zu können)
+  storagePath?: string;
+}
+
+export interface InsurancePolicy {
+  id: string;
+  name: string;
+  type?: InsuranceType | string;
+  insurer?: string;
+  policyNumber?: string;
+  startDate?: string;
+  endDate?: string;
+  paymentInterval?: string;
+  premiumAmount?: number;
+  coverageSummary?: string;
+  coverageItems?: string[];
+  exclusions?: string[];
+  contactPhone?: string;
+  contactEmail?: string;
+  documents?: InsuranceDocument[];
+  riskScore?: number;
+  riskGaps?: string[];
+  riskRecommendation?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface InsuranceClaim {
+  id: string;
+  policyId: string;
+  type: InsuranceClaimType | string;
+  title: string;
+  description?: string;
+  createdAt?: string;
+  documents: InsuranceDocument[];
+  aiSummary?: string;
+  aiRecommendation?: string;
+  status?: string;
+}
+
+export interface ClaimEvent {
+  id?: string;
+  claimId: string;
+  eventType: string;
+  payloadJson?: any;
+  createdAt?: string;
+}
+
+export interface FeatureFlagsMap { [flag: string]: boolean; }
+
+// Verbindlichkeiten (Liabilities / Schulden & Verträge)
+export interface Liability {
+  id: string;
+  name: string; // Freier Name / Titel
+  creditor?: string; // Gläubiger
+  contractNumber?: string;
+  startDate?: string;
+  endDate?: string;
+  paymentInterval?: string; // monatlich|quartal|jährlich|einmalig
+  outstandingAmount?: number; // Offener Restbetrag
+  originalAmount?: number; // Ursprünglicher Betrag / Kreditbetrag
+  interestRatePercent?: number; // Effektiver Zinssatz
+  category?: string; // z.B. Darlehen, Leasing, Lieferant, Sonstige
+  notes?: string;
+  tags?: string[];
+  contactEmail?: string;
+  contactPhone?: string;
+  aiRiskScore?: number; // KI Bewertung (0-1)
+  aiRecommendation?: string;
+  aiSummary?: string; // Kurz-Zusammenfassung
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LiabilityDocument {
+  id: string;
+  liabilityId: string;
+  fileName: string;
+  uploadedAt: string;
+  textContent?: string;
+  publicUrl?: string;
+}
+
+// Kontakte (aggregiert aus Policen, Verbindlichkeiten, Dokumenten Vendors)
+export interface Contact {
+  id: string; // stable hash oder zusammengesetzt
+  name: string; // Firmenname oder Ansprechpartner
+  type: 'Gläubiger' | 'Versicherung' | 'Vendor' | 'Sonstige';
+  email?: string;
+  phone?: string;
+  sourceIds?: string[]; // referenzierte Entity IDs
+  tags?: string[];
+  lastDocumentDate?: string;
+  notes?: string;
+  aiSummary?: string; // optional KI Kurzzusammenfassung
+}
+

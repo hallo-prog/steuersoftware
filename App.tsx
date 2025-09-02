@@ -27,6 +27,8 @@ import { Document, View, Rule, InvoiceType, RuleSuggestion, NotificationSettings
 import { supabase } from './src/supabaseClient';
 import GlobalLoader from './components/GlobalLoader';
 import { getDeadlines } from './services/deadlineService';
+import { notificationService } from './services/notificationService';
+import { auditService } from './services/auditService';
 import { useThemeClasses } from './hooks/useThemeClasses';
 
 const initialRules: Rule[] = [
@@ -222,6 +224,24 @@ const App: React.FC = () => {
     });
     return () => { mounted = false; sub.subscription.unsubscribe(); };
   }, []);
+
+  // Initialize notification service when user session is established
+  useEffect(() => {
+    if (sessionUserId) {
+      // Start the notification processor with 5-minute intervals
+      notificationService.startNotificationProcessor(5);
+      
+      // Log app initialization
+      auditService.logAction(
+        'app_initialized',
+        'system',
+        'app',
+        { userId: sessionUserId, timestamp: new Date().toISOString() },
+        true,
+        sessionUserId
+      );
+    }
+  }, [sessionUserId]);
 
   // Demo Seed Daten nur einmal nach erster Auth für leere Accounts
   useEffect(() => {

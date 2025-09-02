@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { Document, DocumentSource, DocumentStatus, InvoiceType, Rule, RuleSuggestion } from '../types';
 import { analyzeDocument, getDocumentStatusFromAnalysis, createSuggestedFileName, embedTexts, extractContactsFromText } from '../services/geminiLazy';
-import { uploadFileToBucket, insertDocument, updateDocument } from '../services/supabaseDataService';
+import { uploadFileToBucket, insertDocument, updateDocument, insertTask, insertAuditEvent, insertDeadlineDB } from '../services/supabaseDataService';
+import { extractDeadlinesFromText, pickPrimaryDeadline } from '../services/deadlineExtraction';
 import { hybridUpload } from '../services/hybridStorage';
 import { upsertContactDedupe } from '../services/contactDedupe';
 import { UploadCloudIcon } from './icons/UploadCloudIcon';
@@ -101,6 +102,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, setDocuments, rules,
             }
             inserted = await insertDocument(userId, finalDoc);
             showToast?.('Beleg gespeichert','success');
+            try { await insertAuditEvent(userId, { actorType: 'system', eventType: 'document.inserted', payloadJson: { documentId: inserted.id, name: inserted.name } }); } catch {}
           } catch (e) { console.warn('DB insert fail', e); }
           // Kontakte extrahieren (asynchron, unabhängig von Insert Fehlern)
           if (finalDoc.textContent) {
@@ -134,9 +136,48 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, setDocuments, rules,
             suggestionMade = true;
           }
           setDocuments(prev => prev.map(d => d.id===placeholder.id ? (inserted || { ...d, ...finalDoc, id: d.id }) : d));
+
+          // Einfache KI-Task Generierung (heuristisch / Mock falls kein API Key)
+          try {
+            if (inserted) {
+              const tasksToCreate: Array<{ title:string; description?:string; priority:'low'|'normal'|'high'|'critical'; dueDate?: string; autoAction?: any; }>=[];
+              const lower = (finalDoc.textContent||'').toLowerCase();
+              // Rechnung bezahlen
+              if (result.isInvoice && finalDoc.totalAmount && (finalDoc.invoiceType === InvoiceType.INCOMING)) {
+                const due = new Date(date.getTime()+1000*60*60*24*14); // Default 14 Tage
+                tasksToCreate.push({ title: `Rechnung bezahlen: ${finalDoc.vendor||inserted.name}`, description: `Betrag: ${(finalDoc.totalAmount||0).toFixed(2)} EUR\nBeleg: ${inserted.name}`, priority: 'normal', dueDate: due.toISOString().split('T')[0] });
+              }
+              // Mahnung erkennen
+              if (/mahnung|zahlungserinnerung/.test(lower)) {
+                tasksToCreate.push({ title: 'Mahnung prüfen', description: `Dokument ${inserted.name} enthält Mahnungs-Hinweise.`, priority: 'high' });
+              }
+              // Automatische Aktions-Vorschlag (z.B. Zahlungsbestätigung E-Mail bei Ausgangsrechnung)
+              if (result.invoiceType === InvoiceType.OUTGOING) {
+                tasksToCreate.push({ title: 'Zahlungsbestätigung senden', description: `Kunde: ${finalDoc.vendor||'unbekannt'}`, priority: 'low', autoAction: { type: 'email', template: 'payment_confirmation', suggested: true } });
+              }
+              // Deadlines extrahieren & speichern (lokal heuristisch)
+              if (finalDoc.textContent) {
+                try {
+                  const found = extractDeadlinesFromText(finalDoc.textContent.slice(0,12000));
+                  const primary = pickPrimaryDeadline(found);
+                  if (primary) {
+                    tasksToCreate.push({ title: primary.type==='payment' ? 'Zahlung fristgerecht leisten' : primary.type==='appeal' ? 'Einspruch prüfen' : 'Frist beachten', description: `Automatisch erkannt: ${primary.phrase}`, priority: 'high', dueDate: primary.date });
+                    await insertDeadlineDB(userId, primary.type==='payment' ? 'Zahlungsfrist' : primary.type==='appeal' ? 'Einspruchsfrist' : 'Frist', primary.date);
+                    await insertAuditEvent(userId, { actorType: 'ai', eventType: 'deadline.detected', payloadJson: { documentId: inserted.id, date: primary.date, type: primary.type, confidence: primary.confidence } });
+                  }
+                } catch (e) { console.warn('Deadline extraction failed', e); }
+              }
+              for (const t of tasksToCreate) {
+                try { const created = await insertTask(userId, { documentId: inserted.id, title: t.title, description: t.description, priority: t.priority, dueDate: t.dueDate, autoAction: t.autoAction, source: 'ai' });
+                  await insertAuditEvent(userId, { actorType: 'ai', eventType: 'task.generated', payloadJson: { taskId: created.id, documentId: inserted.id, title: created.title } });
+                } catch (e) { console.warn('Task creation failed', e); }
+              }
+            }
+          } catch (e) { console.warn('Task generation failed', e); }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Analysefehler';
           setDocuments(prev => prev.map(d => d.id===placeholder.id ? { ...d, status: DocumentStatus.ERROR, errorMessage } : d));
+          try { await insertAuditEvent(userId, { actorType: 'system', eventType: 'document.analysis_error', payloadJson: { tempId: placeholder.id, error: errorMessage } }); } catch {}
         }
       }
     })();

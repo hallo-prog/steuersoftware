@@ -14,6 +14,9 @@ import ShieldIcon from './icons/ShieldIcon.tsx';
 import DebtIcon from './icons/DebtIcon';
 import UserIcon from './icons/UserIcon';
 import DatabaseIcon from './icons/FolderIcon';
+import CheckCircleIcon from './icons/CheckCircleIcon';
+import { fetchOpenTasksCount } from '../services/supabaseDataService';
+import { useEffect } from 'react';
 import { useThemeClasses } from '../hooks/useThemeClasses';
 
 interface SidebarProps {
@@ -61,6 +64,25 @@ const SidebarContent: React.FC<Omit<SidebarProps, 'isMobileOpen' | 'setIsMobileO
         if (closeMobileSidebar) closeMobileSidebar();
     };
     const ui = useThemeClasses();
+    const [openTasks, setOpenTasks] = useState<number>(0);
+    useEffect(()=>{ (async()=>{ try { const uid = localStorage.getItem('supabase.auth.token'); /* placeholder user context not directly here */ } catch{} })(); },[]);
+    // Simplified fetch via window event (App kann Count dispatchen) – fallback Poll
+    useEffect(()=>{
+      let cancelled=false;
+      const refresh = async () => {
+        try {
+          const raw = (window as any).appUserId as string|undefined;
+          if (!raw) return;
+          const { fetchOpenTasksCount } = await import('../services/supabaseDataService');
+          const cnt = await fetchOpenTasksCount(raw);
+          if (!cancelled) setOpenTasks(cnt);
+        } catch {}
+      };
+      refresh();
+      const id = setInterval(refresh, 30000);
+      window.addEventListener('tasks-updated', refresh);
+      return ()=> { cancelled=true; clearInterval(id); window.removeEventListener('tasks-updated', refresh); };
+    },[]);
 
     return (
         <>
@@ -81,6 +103,7 @@ const SidebarContent: React.FC<Omit<SidebarProps, 'isMobileOpen' | 'setIsMobileO
                   <NavItem onClick={() => handleNavClick(View.VERSICHERUNGEN)} isActive={activeView === View.VERSICHERUNGEN} isSidebarOpen={isSidebarOpen} label="Versicherungen"><ShieldIcon className="h-5 w-5 text-slate-500 dark:text-slate-400" /></NavItem>
                   <NavItem onClick={() => handleNavClick(View.VERBINDLICHKEITEN)} isActive={activeView === View.VERBINDLICHKEITEN} isSidebarOpen={isSidebarOpen} label="Verbindlichkeiten"><DebtIcon className="h-5 w-5 text-slate-500 dark:text-slate-400" /></NavItem>
                   <NavItem onClick={() => handleNavClick(View.KONTAKTE)} isActive={activeView === View.KONTAKTE} isSidebarOpen={isSidebarOpen} label="Kontakte"><UserIcon className="h-5 w-5 text-slate-500 dark:text-slate-400" /></NavItem>
+                  <NavItem onClick={() => handleNavClick(View.TASKS)} isActive={activeView === View.TASKS} isSidebarOpen={isSidebarOpen} label={`Aufgaben${openTasks?` (${openTasks})`:''}`}><CheckCircleIcon className="h-5 h-5 text-slate-500 dark:text-slate-400" /></NavItem>
                   <NavItem onClick={() => handleNavClick(View.DATENBANKEN)} isActive={activeView === View.DATENBANKEN} isSidebarOpen={isSidebarOpen} label="Datenbanken"><DatabaseIcon className="h-5 w-5 text-slate-500 dark:text-slate-400" /></NavItem>
                   <NavItem onClick={() => handleNavClick(View.DEADLINES)} isActive={activeView === View.DEADLINES} isSidebarOpen={isSidebarOpen} label="Fristen"><CalendarIcon className="h-5 w-5 text-slate-500 dark:text-slate-400" /></NavItem>
                   <NavItem onClick={() => handleNavClick(View.LEXOFFICE)} isActive={activeView === View.LEXOFFICE} isSidebarOpen={isSidebarOpen} label="LexOffice"><LexofficeIcon className="h-5 w-5 text-slate-500 dark:text-slate-400" /></NavItem>

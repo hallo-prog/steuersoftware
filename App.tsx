@@ -17,6 +17,7 @@ const FörderungenView = lazy(() => import(/* webpackChunkName: "foerderungen-vi
 const VersicherungenView = lazy(() => import(/* webpackChunkName: "versicherungen-view" */ './components/VersicherungenView'));
 const VerbindlichkeitenView = lazy(() => import(/* webpackChunkName: "verbindlichkeiten-view" */ './components/VerbindlichkeitenView'));
 const KontakteView = lazy(() => import(/* webpackChunkName: "kontakte-view" */ './components/KontakteView'));
+const TasksView = lazy(() => import(/* webpackChunkName: "tasks-view" */ './components/TasksView'));
 const DataBrowserView = lazy(() => import(/* webpackChunkName: "data-browser-view" */ './components/DataBrowserView.tsx'));
 const ChatPanel = lazy(() => import(/* webpackChunkName: "chat-panel" */ './components/ChatPanel'));
 const DocumentDetailModal = lazy(() => import(/* webpackChunkName: "document-modal" */ './components/DocumentDetailModal'));
@@ -171,6 +172,7 @@ const AppShell: React.FC<{ theme: Theme; toggleTheme: () => void; sessionUserId?
       {activeView === View.VERSICHERUNGEN && <VersicherungenView apiKey={apiKey} userId={userId} documents={documents} />}
       {activeView === View.VERBINDLICHKEITEN && <VerbindlichkeitenView apiKey={apiKey} userId={userId} documents={documents} />}
       {activeView === View.KONTAKTE && <KontakteView apiKey={apiKey} userId={userId} documents={documents} policies={[]} liabilities={[]} />}
+  {activeView === View.TASKS && <TasksView userId={userId} documents={documents} apiKey={apiKey} onSelectDocument={(id)=>{ const doc = documents.find(d=>d.id===id); if (doc) setDocumentToView(doc); }} />}
       {activeView === View.DATENBANKEN && <DataBrowserView apiKey={apiKey} userId={userId} />}
           </main>
         </Suspense>

@@ -1,5 +1,5 @@
 import { supabase } from '../src/supabaseClient';
-import { Document, InvoiceType, Rule, InsurancePolicy, InsuranceClaim, UserProfile, InsuranceDocument, Liability, LiabilityDocument, Contact } from '../types';
+import { Document, InvoiceType, Rule, InsurancePolicy, InsuranceClaim, UserProfile, InsuranceDocument, Liability, LiabilityDocument, Contact, Task, AuditEvent, Deadline } from '../types';
 // Lazy KI Funktionen nur bei Bedarf laden (verhindert großes Initialbundle)
 const lazyEmbed = async (...args:any[]) => (await import('./geminiLazy')).embedTexts(...args);
 
@@ -443,6 +443,88 @@ export const upsertContact = async (userId:string, c: Partial<Contact>): Promise
 };
 
 export const deleteContact = async (id:string) => { await supabase.from('contacts').delete().eq('id', id); };
+
+// ---------------------- Tasks ---------------------------------------------
+const mapTask = (row:any): Task => ({
+  id: row.id,
+  userId: row.user_id,
+  documentId: row.document_id || undefined,
+  title: row.title,
+  description: row.description || undefined,
+  priority: row.priority,
+  status: row.status,
+  source: row.source,
+  dueDate: row.due_date || undefined,
+  autoAction: row.auto_action || null,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export const fetchTasks = async (userId: string): Promise<Task[]> => {
+  const { data, error } = await supabase.from('tasks').select('*').eq('user_id', userId).order('due_date', { ascending: true }).order('created_at',{ascending:false});
+  if (error) throw error; return (data||[]).map(mapTask);
+};
+
+export const insertTask = async (userId: string, task: Partial<Task>): Promise<Task> => {
+  const { data, error } = await supabase.from('tasks').insert({
+    user_id: userId,
+    document_id: task.documentId,
+    title: task.title,
+    description: task.description,
+    priority: task.priority || 'normal',
+    status: task.status || 'open',
+    source: task.source || 'ai',
+    due_date: task.dueDate,
+    auto_action: task.autoAction as any,
+  }).select().single();
+  if (error) throw error; return mapTask(data);
+};
+
+export const updateTask = async (id:string, patch: Partial<Task>): Promise<Task> => {
+  const upd:any = {
+    title: patch.title,
+    description: patch.description,
+    priority: patch.priority,
+    status: patch.status,
+    due_date: patch.dueDate,
+    auto_action: patch.autoAction as any,
+  };
+  const { data, error } = await supabase.from('tasks').update(upd).eq('id', id).select().single();
+  if (error) throw error; return mapTask(data);
+};
+
+export const deleteTask = async (id:string) => { const { error } = await supabase.from('tasks').delete().eq('id', id); if (error) throw error; };
+
+// ---------------------- Audit Events --------------------------------------
+const mapAudit = (row:any): AuditEvent => ({ id: row.id, userId: row.user_id, correlationId: row.correlation_id||undefined, actorType: row.actor_type, eventType: row.event_type, payloadJson: row.payload_json||undefined, createdAt: row.created_at });
+
+export const insertAuditEvent = async (userId:string, event: Omit<AuditEvent,'id'|'userId'|'createdAt'>): Promise<AuditEvent> => {
+  const { data, error } = await supabase.from('audit_events').insert({ user_id: userId, correlation_id: event.correlationId, actor_type: event.actorType, event_type: event.eventType, payload_json: event.payloadJson }).select().single();
+  if (error) throw error; return mapAudit(data);
+};
+
+export const fetchAuditEvents = async (userId:string, limit=100): Promise<AuditEvent[]> => {
+  const { data, error } = await supabase.from('audit_events').select('*').eq('user_id', userId).order('created_at',{ascending:false}).limit(limit);
+  if (error) throw error; return (data||[]).map(mapAudit);
+};
+
+// ---------------------- Deadlines (DB) ------------------------------------
+const mapDeadlineDB = (row:any): Deadline => ({ id: row.id, title: row.title, dueDate: new Date(row.due_date), remainingDays: Math.round((new Date(row.due_date).getTime() - Date.now())/(1000*60*60*24)) });
+
+export const fetchDeadlinesDB = async (userId:string): Promise<Deadline[]> => {
+  const { data, error } = await supabase.from('deadlines').select('*').eq('user_id', userId).order('due_date',{ascending:true});
+  if (error) throw error; return (data||[]).map(mapDeadlineDB);
+};
+
+export const insertDeadlineDB = async (userId:string, title:string, dueDate:string): Promise<Deadline> => {
+  const { data, error } = await supabase.from('deadlines').insert({ user_id: userId, title, due_date: dueDate }).select().single();
+  if (error) throw error; return mapDeadlineDB(data);
+};
+
+export const fetchOpenTasksCount = async (userId:string): Promise<number> => {
+  const { count, error } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('status','open');
+  if (error) throw error; return count||0;
+};
 
 // ---------------------- Chat History -------------------------------------
 export interface ChatThreadRow { id: string; user_id: string; title: string; created_at: string; updated_at: string; summary?: string|null }

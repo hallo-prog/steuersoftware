@@ -11,6 +11,7 @@ export enum View {
   VERBINDLICHKEITEN = 'verbindlichkeiten',
   KONTAKTE = 'kontakte',
   DATENBANKEN = 'datenbanken',
+  TASKS = 'tasks',
 }
 
 export enum DocumentSource {
@@ -260,5 +261,31 @@ export interface Contact {
   lastDocumentDate?: string;
   notes?: string;
   aiSummary?: string; // optional KI Kurzzusammenfassung
+}
+
+// Aufgaben / Tasks
+export interface Task {
+  id: string;
+  userId: string;
+  documentId?: string;
+  title: string;
+  description?: string;
+  priority: 'low'|'normal'|'high'|'critical';
+  status: 'open'|'in_progress'|'done'|'cancelled'|'auto_executed';
+  source: 'ai'|'user'|'system';
+  dueDate?: string; // ISO
+  autoAction?: { type: string; template?: string; suggested?: boolean; executedAt?: string; } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  userId: string;
+  correlationId?: string;
+  actorType: 'user'|'system'|'ai';
+  eventType: string;
+  payloadJson?: any;
+  createdAt: string;
 }
 

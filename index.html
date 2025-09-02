@@ -4,70 +4,43 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Steuer KI Agent</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <title>Steuer KI Agent</title>
+  <!-- Tailwind wird jetzt lokal via PostCSS/CLI gebaut (kein CDN im Prod) -->
+  <!-- Entferntes Import-Map (Konflikt mit Vite-Bundling). Nutzung lokaler node_modules Bundles. -->
+</head>
+  <body class="bg-slate-50 dark:bg-slate-900">
     <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              // New, professional color palette inspired by OpenAI's aesthetic
-              slate: {
-                50: '#f8fafc',
-                100: '#f1f5f9',
-                200: '#e2e8f0',
-                300: '#cbd5e1',
-                400: '#94a3b8',
-                500: '#64748b',
-                600: '#475569',
-                700: '#334155',
-                800: '#1e293b',
-                900: '#0f172a',
-              },
-              blue: {
-                50: '#eff6ff',
-                100: '#dbeafe',
-                200: '#bfdbfe',
-                300: '#93c5fd',
-                400: '#60a5fa',
-                500: '#3b82f6',
-                600: '#2563eb',
-                700: '#1d4ed8',
-                800: '#1e40af',
-                900: '#1e3a8a',
-              },
-              // Legacy primary for potential compatibility, mapping to new blue
-              primary: {
-                '50': '#eff6ff',
-                '100': '#dbeafe',
-                '200': '#bfdbfe',
-                '300': '#93c5fd',
-                '400': '#60a5fa',
-                '500': '#3b82f6',
-                '600': '#2563eb',
-                '700': '#1d4ed8',
-                '800': '#1e40af',
-                '900': '#1e3a8a',
-                '950': '#172554',
-              },
-            }
+      // Verhindert Flash & erzwingt korrekte Klasse laut localStorage (Fallback: prefers-color-scheme)
+      (function(){
+        try {
+          let t = localStorage.getItem('theme');
+          if (!t) {
+            // Falls noch nie gesetzt: Systempräferenz
+            t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            localStorage.setItem('theme', t);
           }
-        }
+          if (t === 'dark') document.documentElement.classList.add('dark');
+          else document.documentElement.classList.remove('dark');
+        } catch {}
+      })();
+    </script>
+    <div id="root"></div>
+    <script>
+      // Debug Helfer im Browser (optional):
+      window.forceLight = function(){ localStorage.setItem('theme','light'); document.documentElement.classList.remove('dark'); document.documentElement.setAttribute('data-theme','light'); console.log('Forced light'); };
+      window.forceDark = function(){ localStorage.setItem('theme','dark'); document.documentElement.classList.add('dark'); document.documentElement.setAttribute('data-theme','dark'); console.log('Forced dark'); };
+      window.themeInfo = function(){ console.log({localStorageTheme: localStorage.getItem('theme'), htmlClass: document.documentElement.className, dataTheme: document.documentElement.getAttribute('data-theme')}); };
+      if (localStorage.getItem('debugTheme')==='1') {
+        const box = document.createElement('div');
+        box.id='theme-debug';
+        box.style.cssText='position:fixed;bottom:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;font:12px monospace;padding:6px 8px;border-radius:6px;z-index:9999;';
+        function refresh(){ box.textContent = 'theme='+localStorage.getItem('theme')+' classes='+document.documentElement.className; }
+        refresh();
+        const obs = new MutationObserver(refresh); obs.observe(document.documentElement,{attributes:true,attributeFilter:['class']});
+        setInterval(refresh,1500);
+        document.body.appendChild(box);
       }
     </script>
-  <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.16.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
-    "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "react": "https://aistudiocdn.com/react@^19.1.1"
-  }
-}
-</script>
-</head>
-  <body class="bg-slate-50">
-    <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

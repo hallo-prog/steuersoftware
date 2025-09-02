@@ -5,6 +5,7 @@ import AlertTriangleIcon from './icons/AlertTriangleIcon';
 import CameraIcon from './icons/CameraIcon';
 import CheckCircleIcon from './icons/CheckCircleIcon';
 import CopyIcon from './icons/CopyIcon';
+import { useThemeClasses } from '../hooks/useThemeClasses';
 
 interface DocumentItemProps {
   document: Document;
@@ -59,12 +60,13 @@ const DocumentItem: React.FC<DocumentItemProps> = ({ document, onSelect, isSelec
      }
   }
 
+  const ui = useThemeClasses();
   return (
     <div 
-      className={`transition-colors ${isSelected ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'} ${document.status !== DocumentStatus.ANALYZING ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`transition-colors ${isSelected ? ui.listRowSelected : ui.listRow + ' ' + ui.listRowHover} ${document.status !== DocumentStatus.ANALYZING ? 'cursor-pointer' : 'cursor-default'}`}
       onClick={handleItemClick}
     >
-      <div className="flex items-center justify-between p-3 border-b border-slate-200">
+      <div className={`flex items-center justify-between p-3 border-b ${ui.border}`}>
         <div className="flex items-center min-w-0 flex-grow">
           <input 
             type="checkbox"
@@ -76,18 +78,23 @@ const DocumentItem: React.FC<DocumentItemProps> = ({ document, onSelect, isSelec
           />
           <FileIcon className="w-5 h-5 mr-4 text-blue-500 flex-shrink-0" />
           <div className="flex flex-col min-w-0">
-            <span className="text-sm font-medium text-slate-800 truncate">
+            <span className={`text-sm font-medium truncate ${ui.textPrimary}`}>
               {document.name}
             </span>
-            <span className="text-xs text-slate-500">
+            {document.storageProvider && (
+              <span className={`mt-0.5 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide ${document.storageProvider==='r2' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'}`}
+                title={`Speicher: ${document.storageProvider==='r2' ? 'Cloudflare R2' : 'Supabase Storage'}`}
+              >{document.storageProvider==='r2' ? 'R2' : 'SB'}</span>
+            )}
+            <span className={`text-xs ${ui.textMuted}`}>
               {formatDate(document.date)} &bull; {document.source}
             </span>
           </div>
         </div>
-        <div className="hidden sm:flex items-center ml-4 space-x-4 flex-shrink-0">
+  <div className="hidden sm:flex items-center ml-4 space-x-4 flex-shrink-0">
            <div className="w-28 text-right">
              {isSendingToLexoffice ? (
-                <div className="flex items-center justify-end text-xs text-slate-500">
+                <div className={`flex items-center justify-end text-xs ${ui.textMuted}`}>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-500 mr-2"></div>
                     Sende...
                 </div>
@@ -107,16 +114,31 @@ const DocumentItem: React.FC<DocumentItemProps> = ({ document, onSelect, isSelec
                     e.stopPropagation();
                     onSendToLexoffice(document.id);
                   }}
-                  className="bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold py-1 px-3 rounded-full transition-colors"
+                  className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-semibold py-1 px-3 rounded-full transition-colors"
                   title="Diesen Beleg an LexOffice senden"
                 >
                   Senden
                 </button>
               )}
            </div>
-            <div className={`flex items-center text-xs font-medium ${statusInfo.color} w-32 justify-start`} title={statusInfo.tooltip}>
-                {statusInfo.icon && <span className="mr-1.5">{statusInfo.icon}</span>}
-                <span className="truncate">{statusInfo.text}</span>
+            <div className="flex flex-col items-end gap-1 w-40">
+              <div className={`flex items-center text-xs font-medium ${statusInfo.color} w-full justify-start`} title={statusInfo.tooltip}>
+                  {statusInfo.icon && <span className="mr-1.5">{statusInfo.icon}</span>}
+                  <span className="truncate">{statusInfo.text}</span>
+              </div>
+              {(document.aiSuggestedTaxCategory || (document.flags&&document.flags.length) || document.anomalyScore!=null) && (
+        <div className="flex flex-wrap gap-1 justify-end">
+                  {document.aiSuggestedTaxCategory && (
+          <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-semibold" title="KI vorgeschlagene Kategorie">{document.aiSuggestedTaxCategory}</span>
+                  )}
+                  {document.flags && document.flags.map(f => (
+          <span key={f} className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-medium" title="Hinweis / Flag">{f}</span>
+                  ))}
+      {document.anomalyScore!=null && Number.isFinite(document.anomalyScore) && (
+    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${document.anomalyScore>0.7?'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400':document.anomalyScore>0.4?'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300':'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'}`} title={`Anomalie-Score ${Number.isFinite(document.anomalyScore)?(document.anomalyScore*100).toFixed(0):'?'}%`}>A{Number.isFinite(document.anomalyScore)?(document.anomalyScore*100).toFixed(0):'?'}%</span>
+      )}
+                </div>
+              )}
             </div>
         </div>
       </div>

@@ -1,12 +1,14 @@
 import React from 'react';
 import { Deadline } from '../types';
 import CalendarIcon from './icons/CalendarIcon';
+import { useThemeClasses } from '../hooks/useThemeClasses';
 
 interface DeadlinesViewProps {
   deadlines: Deadline[];
 }
 
 const DeadlineCard: React.FC<{ deadline: Deadline }> = ({ deadline }) => {
+  const ui = useThemeClasses();
     const { title, dueDate, remainingDays } = deadline;
 
     const getRemainingDaysText = () => {
@@ -16,12 +18,12 @@ const DeadlineCard: React.FC<{ deadline: Deadline }> = ({ deadline }) => {
         return `Noch ${remainingDays} Tage`;
     };
 
-    const urgencyColorClass = remainingDays <= 7 ? 'text-red-600' : remainingDays <= 30 ? 'text-yellow-600' : 'text-green-600';
+  const urgencyColorClass = remainingDays <= 7 ? ui.statusNegativeText : remainingDays <= 30 ? ui.statusWarningText : ui.statusPositiveText;
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h3 className="text-lg font-bold text-slate-800">{title}</h3>
-            <p className="text-sm text-slate-500 mt-1">
+    <div className={`${ui.card} ${ui.border} p-6 rounded-xl shadow-sm`}>
+      <h3 className={`text-lg font-bold ${ui.textPrimary}`}>{title}</h3>
+      <p className={`text-sm mt-1 ${ui.textMuted}`}>
                 Fällig am: <span className="font-semibold">{dueDate.toLocaleDateString('de-DE')}</span>
             </p>
             <div className="mt-4 text-2xl font-bold">
@@ -34,18 +36,19 @@ const DeadlineCard: React.FC<{ deadline: Deadline }> = ({ deadline }) => {
 }
 
 const DeadlinesView: React.FC<DeadlinesViewProps> = ({ deadlines }) => {
+  const ui = useThemeClasses();
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-3xl font-bold text-slate-800">Steuerfristen</h2>
-        <p className="text-slate-500 mt-1">Hier sehen Sie eine Übersicht aller bevorstehenden Abgabefristen.</p>
+    <h2 className={`text-3xl font-bold ${ui.textPrimary}`}>Steuerfristen</h2>
+    <p className={`${ui.textMuted} mt-1`}>Hier sehen Sie eine Übersicht aller bevorstehenden Abgabefristen.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {deadlines.length > 0 ? (
             deadlines.map(deadline => <DeadlineCard key={deadline.id} deadline={deadline} />)
         ) : (
-            <p className="text-slate-500 col-span-2 text-center py-8">
+            <p className={`${ui.textMuted} col-span-2 text-center py-8`}>
                 Alle Fristen für dieses Jahr sind bereits abgelaufen.
             </p>
         )}

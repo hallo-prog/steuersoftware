@@ -11,7 +11,8 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "@supabase/supabase-js"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
